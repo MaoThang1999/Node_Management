@@ -1,0 +1,4 @@
+#ifndef NODE_MANAGEMENT_H
+#define NODE_MANAGEMENT_H
+
+#endif /* NODE_MANAGEMENT_H */

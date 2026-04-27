@@ -1,0 +1,4 @@
+#ifndef CONTROL_PLANT_NODE_H
+#define CONTROL_PLANT_NODE_H
+
+#endif /* CONTROL_PLANT_NODE_H */

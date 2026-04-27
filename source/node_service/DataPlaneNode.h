@@ -1,0 +1,4 @@
+#ifndef DATA_PLANT_NODE_H
+#define DATA_PLANT_NODE_H
+
+#endif /* DATA_PLANT_NODE_H */
