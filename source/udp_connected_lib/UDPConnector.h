@@ -61,6 +61,7 @@ private:
 
 // Helper functions for UDP communication
 int initUDPSock(SharedContext& pCtx);
+int closeUDPSock(SharedContext& pCtx);
 int sendDataUDP(sockaddr_in& pTargetAddr, std::string pMessage, SharedContext& pCtx);
 int recvDataUDP(char* pBuffer, sockaddr_in& pTargetAddr, SharedContext& pCtx);
 

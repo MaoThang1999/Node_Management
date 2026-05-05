@@ -25,6 +25,8 @@ public:
     void handleTxThread(); // Sends packets from g_sendIOQueue over UDP
     void handleRxThread(); // Receives UDP packets and pushes parsed packets to g_receivedIOQueue
     static IOHandler* getInstall();
+    void setUDPSocket(SharedContext& pCtx);
+    SharedContext getUDPSocket();
 
 private:
 

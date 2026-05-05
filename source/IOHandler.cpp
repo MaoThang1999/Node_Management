@@ -28,7 +28,6 @@ bool IOHandler::start(){
 
     if(!(m_running.load(std::memory_order_acquire))){
         m_running.store(true,std::memory_order_release);
-        initUDPSock(m_ctx);
         UDPReceived::getInstall()->start(m_ctx);
         g_sendIOQueue.start();
         g_bufferUDPRecv.start();
@@ -82,6 +81,14 @@ IOHandler* IOHandler::getInstall(){
             m_install = new IOHandler();
         }
         return m_install;
+}
+
+void IOHandler::setUDPSocket(SharedContext& pCtx){
+    m_ctx = pCtx;
+}
+
+SharedContext IOHandler::getUDPSocket(){
+    return m_ctx;
 }
 
 // -----------------------------------------------------------------------------

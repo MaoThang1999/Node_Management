@@ -76,6 +76,11 @@ UDPReceived* UDPReceived::getInstall(){
         return m_install;
 }
 
+/**
+ * @brief Initializes Winsock, creates and binds a UDP socket.
+ * @param pCtx Shared context that will store the created socket.
+ * @return 0 on success, -1 on failure (socket closed, Winsock cleaned up).
+ */
 int initUDPSock(SharedContext& pCtx){
     // Initialize Winsock
     WSADATA wsaData;
@@ -103,7 +108,7 @@ int initUDPSock(SharedContext& pCtx){
     serverAddr.sin_addr.s_addr = INADDR_ANY; // listen every interface
 
     if (bind(pCtx.sock, (sockaddr*)&serverAddr, sizeof(serverAddr)) == SOCKET_ERROR) {
-        std::cerr << "Bind failed: " << WSAGetLastError() << std::endl;
+        //std::cerr << "Bind failed: " << WSAGetLastError() << std::endl;
         closesocket(pCtx.sock);
         WSACleanup();
         return -1;
@@ -112,6 +117,29 @@ int initUDPSock(SharedContext& pCtx){
     return 0;
 }
 
+/**
+ * @brief Closes the UDP socket and cleans up Winsock.
+ * @param pCtx Shared context containing the socket to close.
+ * @return 0 on success, -1 if socket was already invalid.
+ */
+int closeUDPSock(SharedContext& pCtx) {
+    if (pCtx.sock != INVALID_SOCKET) {
+        closesocket(pCtx.sock);
+        pCtx.sock = INVALID_SOCKET;
+    } else {
+        return -1; // Socket already closed or invalid
+    }
+    WSACleanup();
+    return 0;
+}
+
+/**
+ * @brief Sends a UDP message to a target address.
+ * @param pTargetAddr Target socket address (IP and port).
+ * @param pMessage String message to send.
+ * @param pCtx Shared context containing the UDP socket.
+ * @return 0 on success, -1 on error (invalid parameters or sendto failure).
+ */
 int sendDataUDP(sockaddr_in& pTargetAddr, std::string pMessage, SharedContext& pCtx){
 
     int targetLen;
@@ -133,6 +161,13 @@ int sendDataUDP(sockaddr_in& pTargetAddr, std::string pMessage, SharedContext& p
     return 0;
 }
 
+/**
+ * @brief Receives a UDP message (blocking) and stores it in a buffer.
+ * @param pBuffer Output buffer to store the received message (must be at least BUFFER_SIZE).
+ * @param pTargetAddr Output parameter that receives the sender's address.
+ * @param pCtx Shared context containing the UDP socket.
+ * @return 0 on successful reception, -1 on error (except WSAECONNRESET which is ignored).
+ */
 int recvDataUDP(char* pBuffer, sockaddr_in& pTargetAddr, SharedContext& pCtx){
 
     pTargetAddr = {};
@@ -158,7 +193,7 @@ int recvDataUDP(char* pBuffer, sockaddr_in& pTargetAddr, SharedContext& pCtx){
     else if (bytesReceived == SOCKET_ERROR) {
         int err = WSAGetLastError();
         if (err != WSAECONNRESET) {
-            std::cerr << "recvfrom failed with error: " << err << std::endl;
+            //std::cerr << "recvfrom failed with error: " << err << std::endl;
             ret = -1;
         }
         

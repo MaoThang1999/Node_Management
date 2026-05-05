@@ -9,17 +9,29 @@
  * @return PROGRAMSTATE::EXECUTE on success .
  */
 PROGRAMSTATE initialize(){
-    if(NodeManagament::getInstall()->start()){
+
+    SharedContext ctx;
+    int ret = initUDPSock(ctx);
+    if(ret == SUCCESS_CODE){
+        IOHandler::getInstall()->setUDPSocket(ctx);
+    }else{
+        MAIN_LOG("Set UDP Sock Fail");
+    }
+
+    ret = NodeManagament::getInstall()->start();
+    if(ret){
         MAIN_LOG("Start NodeManagament Done");
     }else{
         MAIN_LOG("Start NodeManagament fail");
     }
-    
-    if(IOHandler::getInstall()->start()){
+    ret = IOHandler::getInstall()->start();
+    if(ret){
         MAIN_LOG("Start IOHandler Done");
     }else{
         MAIN_LOG("Start IOHandler fail");
     }
+
+    
     return PROGRAMSTATE::EXECUTE;
 }
 
@@ -85,6 +97,8 @@ PROGRAMSTATE execute(){
  * @return PROGRAMSTATE::SHUTDOWN to exit.
  */
 PROGRAMSTATE finalize(){
+    SharedContext ctx = IOHandler::getInstall()->getUDPSocket();
+    closeUDPSock(ctx);
     return PROGRAMSTATE::SHUTDOWN;
 }
 
@@ -112,7 +126,7 @@ void InitDebugConsole() {
     // Open file debug.log (Mode append)
     g_debugFile.open("debug.log", std::ios::out );
     if (!g_debugFile) {
-        std::cerr << "Cannot open debug.log" << std::endl;
+        //std::cerr << "Cannot open debug.log" << std::endl;
         return;
     }
     

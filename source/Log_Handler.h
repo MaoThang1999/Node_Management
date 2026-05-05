@@ -22,9 +22,10 @@ extern std::ofstream g_debugFile;
         std::time_t tt = std::chrono::system_clock::to_time_t(now); \
         struct tm tm; \
         localtime_s(&tm, &tt); \
-        oss << "ThreadID [" << GetCurrentThreadId() << "] " \
-            << std::put_time(&tm, "%Y-%m-%d %H:%M:%S") << "." << std::setfill('0') << std::setw(3) << ms.count() \
-            << " " << __FUNCTION__ << " (line " << __LINE__ << "): " << msg; \
+        oss << "ThreadID [" << std::left << std::setw(5) << GetCurrentThreadId() << "] " \
+            << std::put_time(&tm, "%Y-%m-%d %H:%M:%S") << "." << std::setfill(' ') << std::setw(3) << ms.count() \
+            << " " << std::left << std::setw(20) << __FUNCTION__ \
+            << " (line " << std::left << std::setw(4) << __LINE__ << "): " << msg; \
         g_debugFile << oss.str() << std::endl; \
         g_debugFile.flush(); \
     } \

@@ -2,46 +2,43 @@
 import socket
 import struct
 import threading
-import queue
 import tkinter as tk
 from tkinter import scrolledtext, ttk
-import time
+import tkinter.simpledialog
+import gc
 
 # ----- Constants -----
 SERVER_IP = "127.0.0.1"
 SERVER_PORT = 12345
 BUFFER_SIZE = 512
+MAX_LOG_LINES = 500
+LINES_TO_DELETE = 100
 
-# Message types
 TYPE_REGISTER = 0x00
 TYPE_PING     = 0x01
 TYPE_PONG     = 0x02
 TYPE_NOTIFY   = 0x03
 
-# Node types
 NODE_BASE         = 0x00
 NODE_DATA_PLANE   = 0x01
 NODE_CONTROL_PLANE= 0x02
 NODE_OAM          = 0x03
 
-# Port assignment for local nodes (each node gets a unique port)
-BASE_LOCAL_PORT = 20000
-
 
 class Node:
-    """Represents a single UDP node with its own socket, listener thread, and auto‑pong timer."""
+    # ... (giữ nguyên như cũ) ...
     def __init__(self, node_id, node_type, local_port, gui_callback):
         self.node_id = node_id
         self.node_type = node_type
         self.local_port = local_port
-        self.gui_callback = gui_callback   # function to append messages to the GUI
+        self.gui_callback = gui_callback
 
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.sock.bind(('', self.local_port))
         self.sock.settimeout(0.5)
         self.running = True
-        self.paused = False          # pause auto-pong
-        self.active_timers = []      # list of threading.Timer objects
+        self.paused = False
+        self.active_timers = []
         self.timer_lock = threading.Lock()
 
         self.server_addr = (SERVER_IP, SERVER_PORT)
@@ -90,7 +87,6 @@ class Node:
             return f"Unknown packet (type={pkt_type:02X}): {payload.hex()}"
 
     def udp_listener(self):
-        """Background thread: receive packets and handle PING (auto-pong)."""
         while self.running:
             try:
                 data, addr = self.sock.recvfrom(BUFFER_SIZE)
@@ -98,7 +94,6 @@ class Node:
                     parsed = self.parse_incoming_packet(data)
                     if parsed:
                         self.gui_callback(f"[From {addr[0]}:{addr[1]}]\n{parsed}")
-                        # If it's a PING, schedule a PONG after 300ms (unless paused)
                         if data[0] == TYPE_PING:
                             with self.timer_lock:
                                 if not self.paused:
@@ -114,7 +109,6 @@ class Node:
                 break
 
     def send_register(self):
-        """Send registration packet."""
         try:
             packet = self.build_register_packet(self.node_type, "REGISTER")
             self.sock.sendto(packet, self.server_addr)
@@ -123,8 +117,6 @@ class Node:
             self.gui_callback(f"[ERROR] Register failed: {e}")
 
     def send_pong(self):
-        """Send a PONG packet (called by timer or manually)."""
-        # Check again if paused (timer may have been scheduled before pause)
         if self.paused:
             return
         try:
@@ -134,31 +126,24 @@ class Node:
         except Exception as e:
             self.gui_callback(f"[ERROR] Pong send failed: {e}")
         finally:
-            # Remove this timer from the list (if it's there)
             with self.timer_lock:
-                for t in self.active_timers[:]:
-                    if not t.is_alive():
-                        self.active_timers.remove(t)
+                self.active_timers = [t for t in self.active_timers if t.is_alive()]
 
     def set_pause(self, paused):
-        """Pause or resume auto‑reply to PING."""
         self.paused = paused
         if paused:
-            # Cancel all pending timers
             with self.timer_lock:
                 for t in self.active_timers:
                     t.cancel()
                 self.active_timers.clear()
 
     def stop(self):
-        """Stop the node and clean up resources."""
         self.running = False
-        self.set_pause(True)   # cancel any pending timers
+        self.set_pause(True)
         self.sock.close()
 
 
 class NodeFrame(tk.Frame):
-    """GUI frame for a single node: register/pause buttons, message log."""
     def __init__(self, parent, node_id, node_type, local_port):
         super().__init__(parent, bd=2, relief=tk.RIDGE)
         self.node = None
@@ -166,37 +151,43 @@ class NodeFrame(tk.Frame):
         self.node_type = node_type
         self.local_port = local_port
 
-        # Node label
         type_names = {NODE_DATA_PLANE: "DATA", NODE_CONTROL_PLANE: "CTRL", NODE_OAM: "OAM"}
         label_text = f"Node {node_id} ({type_names.get(node_type, '?')}) Port:{local_port}"
         self.label = tk.Label(self, text=label_text, font=('Arial', 10, 'bold'))
         self.label.pack(pady=2)
 
-        # Buttons
         btn_frame = tk.Frame(self)
         btn_frame.pack(pady=2)
         self.register_btn = tk.Button(btn_frame, text="Register", width=8, command=self.on_register)
         self.register_btn.pack(side=tk.LEFT, padx=2)
         self.pause_btn = tk.Button(btn_frame, text="Pause Auto", width=12, command=self.toggle_pause)
         self.pause_btn.pack(side=tk.LEFT, padx=2)
+        self.clear_btn = tk.Button(btn_frame, text="Clear Log", width=8, command=self.clear_log)
+        self.clear_btn.pack(side=tk.LEFT, padx=2)
         self.paused_state = False
 
-        # Message display
+        # --- SỬA: luôn ở chế độ normal, nhưng chặn chỉnh sửa bằng bind ---
         self.msg_display = scrolledtext.ScrolledText(self, wrap=tk.WORD, width=50, height=12,
-                                                     state='disabled', font=('Courier', 8))
+                                                     state='normal', font=('Courier', 8))
+        # Chặn mọi thao tác sửa đổi
+        self.msg_display.bind('<Key>', lambda e: 'break')
+        self.msg_display.bind('<BackSpace>', lambda e: 'break')
+        self.msg_display.bind('<Delete>', lambda e: 'break')
+        self.msg_display.bind('<Control-v>', lambda e: 'break')  # chặn dán
+        # Vẫn cho phép copy (Ctrl+C, Ctrl+A) và chọn text
         self.msg_display.pack(padx=5, pady=5, fill=tk.BOTH, expand=True)
 
-        # Create the Node object (starts its own thread)
         self.node = Node(node_id, node_type, local_port, self.append_message)
 
     def append_message(self, text):
-        """Thread‑safe: called from Node's background thread to add a message."""
         def _update():
-            self.msg_display.configure(state='normal')
+            # Không cần toggle state nữa, vì đã luôn normal
             self.msg_display.insert(tk.END, text + '\n' + '-'*40 + '\n')
+            total_lines = int(self.msg_display.index('end-1c').split('.')[0])
+            if total_lines > MAX_LOG_LINES:
+                self.msg_display.delete(1.0, f"{LINES_TO_DELETE + 1}.0")
+                gc.collect()
             self.msg_display.see(tk.END)
-            self.msg_display.configure(state='disabled')
-        # Schedule on the main thread (tkinter)
         self.master.after(0, _update)
 
     def on_register(self):
@@ -207,43 +198,42 @@ class NodeFrame(tk.Frame):
         self.node.set_pause(self.paused_state)
         self.pause_btn.config(text="Resume Auto" if self.paused_state else "Pause Auto")
 
+    def clear_log(self):
+        self.msg_display.delete(1.0, tk.END)
+        self.clear_btn.config(text="Cleared!", relief=tk.SUNKEN)
+        self.master.after(1000, lambda: self.clear_btn.config(text="Clear Log", relief=tk.RAISED))
+        gc.collect()
+
     def stop(self):
         if self.node:
             self.node.stop()
 
 
 class MultiNodeApp:
-    def __init__(self, master):
+    def __init__(self, master, base_port):
         self.master = master
-        master.title("Multi‑Node UDP Client - 9 Nodes (3x3)")
-        # Maximize window
+        master.title(f"Multi‑Node UDP Client - 9 Nodes - Base Port {base_port}")
         master.state('zoomed')
-        # master.attributes('-fullscreen', True)   # optional
 
-        # Define node composition: 3 CONTROL, 4 DATA, 2 OAM (total 9)
         node_types = ([NODE_CONTROL_PLANE] * 3 +
                       [NODE_DATA_PLANE] * 4 +
                       [NODE_OAM] * 2)
-        # Assign unique local ports
-        local_ports = [BASE_LOCAL_PORT + i for i in range(9)]
+        local_ports = [base_port + i for i in range(9)]
 
         main_frame = ttk.Frame(master)
         main_frame.pack(fill=tk.BOTH, expand=True)
 
         self.node_frames = []
-        rows = 3
-        cols = 3
+        rows, cols = 3, 3
         for idx, (node_type, port) in enumerate(zip(node_types, local_ports)):
             row = idx // cols
             col = idx % cols
             frame = NodeFrame(main_frame, idx, node_type, port)
             frame.grid(row=row, column=col, padx=5, pady=5, sticky="nsew")
             self.node_frames.append(frame)
-            # Configure grid weights
             main_frame.grid_rowconfigure(row, weight=1)
             main_frame.grid_columnconfigure(col, weight=1)
 
-        # Handle window close
         master.protocol("WM_DELETE_WINDOW", self.quit_app)
 
     def quit_app(self):
@@ -253,6 +243,24 @@ class MultiNodeApp:
 
 
 if __name__ == "__main__":
+    temp_root = tk.Tk()
+    temp_root.withdraw()
+    base_port = tkinter.simpledialog.askinteger(
+        "Input",
+        "Enter base port (e.g., 20000):",
+        initialvalue=20000,
+        parent=temp_root
+    )
+    temp_root.destroy()
+    if base_port is None:
+        base_port = 20000
+
     root = tk.Tk()
-    app = MultiNodeApp(root)
+    app = MultiNodeApp(root, base_port)
+
+    def periodic_gc():
+        gc.collect()
+        root.after(30000, periodic_gc)
+    root.after(30000, periodic_gc)
+
     root.mainloop()
