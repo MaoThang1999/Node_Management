@@ -1,27 +1,94 @@
+/**
+ * @file UDPConnector.cpp
+ * @brief Implements UDP socket management and a dedicated receiver thread.
+ *
+ */
+
+
 #include "UDPConnector.h"
-// udp_server.cpp
-// Build: cl /EHsc /std:c++17 udp_server.cpp ws2_32.lib
-//        hoặc g++ -std=c++17 udp_server.cpp -lws2_32 -o udp_server.exe
+
 
 #define WIN32_LEAN_AND_MEAN
 
 
-//#pragma comment(lib, "ws2_32.lib")
 
+UDPReceived::UDPReceived(){
+    m_running.store(false,std::memory_order_release);
+
+};
+
+UDPReceived::~UDPReceived(){
+    if(m_RxThread.joinable()){
+        m_RxThread.join();
+    }
+};
+
+bool UDPReceived::start(SharedContext& pCtx){
+    if(!(m_running.load(std::memory_order_acquire))){
+        m_running.store(true,std::memory_order_release);
+        m_ctx = pCtx;
+        m_RxThread = std::thread([&](){handleRxThread();});
+
+    
+        return true;
+
+    }
+    return false;
+}
+
+bool UDPReceived::stop(){
+
+    if(m_running.load(std::memory_order_acquire)){
+        m_running.store(false,std::memory_order_release);
+        return true;
+    }else{
+        return false;
+        // do nothing
+    }
+}
+
+void UDPReceived::handleRxThread(){
+
+    while(true){
+        if(!m_running.load(std::memory_order_acquire)){
+            
+            break;
+        }
+        DataReceivedUDP dataUDP;
+        std::unique_lock<std::mutex> lock(m_mtx);
+        if(m_cv.wait_for(lock, std::chrono::milliseconds(100), [&](){return !recvDataUDP(dataUDP.buffer, dataUDP.clientAddr, m_ctx);} )){
+            g_bufferUDPRecv.push(dataUDP, true);
+        }
+        else{
+        }
+
+
+    }
+
+}
+
+UDPReceived* UDPReceived::getInstall(){
+        static UDPReceived* m_install = nullptr;
+        if(m_install == nullptr){
+            m_install = new UDPReceived();
+        }
+        
+        return m_install;
+}
 
 int initUDPSock(SharedContext& pCtx){
     // Initialize Winsock
     WSADATA wsaData;
     int result = WSAStartup(MAKEWORD(2, 2), &wsaData);
     if (result != 0) {
-        std::cerr << "WSAStartup failed: " << result << std::endl;
+        //std::cerr << "WSAStartup failed: " << result << std::endl;
         return -1;
     }
 
     // Create socket UDP
     pCtx.sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
     if (pCtx.sock == INVALID_SOCKET) {
-        std::cerr << "Socket creation failed: " << WSAGetLastError() << std::endl;
+        //std::cerr << "Socket creation failed: " << WSAGetLastError() << std::endl;
         WSACleanup();
         return -1;
     }
@@ -41,7 +108,7 @@ int initUDPSock(SharedContext& pCtx){
         WSACleanup();
         return -1;
     }
-    std::cout << "UDP Server listening on port " << SERVER_PORT << std::endl;
+    //std::cout << "UDP Server listening on port " << SERVER_PORT << std::endl;
     return 0;
 }
 
@@ -50,14 +117,14 @@ int sendDataUDP(sockaddr_in& pTargetAddr, std::string pMessage, SharedContext& p
     int targetLen;
     targetLen = sizeof(pTargetAddr);
     if(targetLen == 0 || pMessage.empty()){
-        std::cout << "[WARN] No data or client to send to yet.\n";
+        //std::cout << "[WARN] No data or client to send to yet.\n";
         return -1;
     }
     int bytesSent = sendto(pCtx.sock, pMessage.c_str(), (int)pMessage.length(), 0,
                     (sockaddr*)&pTargetAddr, targetLen);
     
     if (bytesSent == SOCKET_ERROR) {
-        std::cerr << "sendto failed: " << WSAGetLastError() << std::endl;
+        //std::cerr << "sendto failed: " << WSAGetLastError() << std::endl;
         return -1;
     }
     else {
@@ -68,11 +135,14 @@ int sendDataUDP(sockaddr_in& pTargetAddr, std::string pMessage, SharedContext& p
 
 int recvDataUDP(char* pBuffer, sockaddr_in& pTargetAddr, SharedContext& pCtx){
 
+    pTargetAddr = {};
     int clientAddrLen = sizeof(pTargetAddr);
     char buffer[BUFFER_SIZE];
     memset(buffer, 0, BUFFER_SIZE);
+
     int bytesReceived = recvfrom(pCtx.sock, buffer, BUFFER_SIZE - 1, 0,
                     (sockaddr*)&pTargetAddr, &clientAddrLen);
+
     int ret = 0;
     if (bytesReceived > 0) {
 

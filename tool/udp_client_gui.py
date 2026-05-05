@@ -81,7 +81,7 @@ class Node:
             if len(payload) < 4:
                 return None
             type_node = payload[0]
-            port = struct.unpack('!H', payload[1:3])[0]
+            port = struct.unpack('<H', payload[1:3])[0]
             state = payload[3]
             msg_bytes = payload[4:]
             message = msg_bytes.decode('utf-8', errors='replace') if msg_bytes else ""

@@ -24,20 +24,21 @@
 #define SUCCESS_CODE            (0)
 #define MAX_STATE 4 
 #define TIMEOUT_PERIODS 2000
-#define TIMESEND_PING   500
+#define TIMESEND_PING   500 // milliseconds between pings
 #define RETRY_NUM 5
 
 
-
+// Payload lengths for different packet types
 constexpr uint8_t PING_PLAYLOADLENGTH = 20;
-//constexpr uint8_t PONG_PLAYLOADLENGTH = 10;
-//constexpr uint8_t RIGISTER_PLAYLOADLENGTH = 15;
 constexpr uint8_t NOTIFY_PLAYLOADLENGTH = 40;
 
 enum class TypeNode {BASE, DATA_PLANE, CONTROL_PLANE, OAM};
 enum class TypeMessage {REGISTER, PING, PONG, NOTIFY, OTHER};
 enum class StateList {INIT, ALIVE, TIMEOUT, DEAD, MAX};
 
+/**
+ * @brief Structure representing a message/state change request from a node to the manager.
+ */
 struct str_MessageState{
     str_MessageState(int pNodeID = 0 , TypeNode pTypeID = TypeNode::BASE , StateList pState = StateList::INIT, uint8_t pMessageType = 0 ){
         m_nodeID = pNodeID;
@@ -64,14 +65,29 @@ struct str_MessageState{
     sockaddr_in m_clientAddr;
 };
 
+/**
+ * @brief Thread-safe queue with blocking pop and graceful stop.
+ * @tparam T Type of elements stored.
+ */
 template <typename T>
 class ThreadSafeQueue{
 
 public:
     ~ThreadSafeQueue() = default;
+    ThreadSafeQueue(){
+        m_running.store(true, std::memory_order_release);
+    }
 
+    /**
+     * @brief Pushes an element into the queue.
+     * @param value Element to push (moved).
+     * @param bForce If true and queue is full, discard oldest element.
+     */
     void push(T value, bool bForce)
     {
+        if(!m_running.load(std::memory_order_acquire)){
+            return ;
+        }
         std::lock_guard<std::mutex> lock(m_mtx);
         if(m_queue.size() >= MAX_SAFE_QUEUE){
             if(bForce){
@@ -95,6 +111,9 @@ public:
     }
 
     bool pop(){
+        if(!m_running.load(std::memory_order_acquire)){
+            return false;
+        }
         std::lock_guard<std::mutex> lock(m_mtx);
         if(m_queue.empty()){
             return false;
@@ -108,9 +127,13 @@ public:
     void resetQueue(){
         std::lock_guard<std::mutex> lock(m_mtx);
         m_queue = {};  
+        m_cv.notify_all();
     }
 
     bool tryPop(T &value){
+        if(!m_running.load(std::memory_order_acquire)){
+            return false;
+        }
         std::lock_guard<std::mutex> lock(m_mtx);
         if(m_queue.empty()){
             return false;
@@ -126,12 +149,37 @@ public:
         return m_queue.size();
     }
 
-    void waitAndPop(T &value, std::atomic<bool>& pRunning){
+    int waitAndPop(T &value){
         std::unique_lock<std::mutex> lock(m_mtx);
-        m_cv.wait(lock, [&]{return !m_queue.empty() || !pRunning.load(std::memory_order_acquire);});
+        m_cv.wait(lock, [&]{return !m_running || !m_queue.empty();});
+
+        if(!m_running.load(std::memory_order_acquire)){
+            return -1;
+        }
         if(!m_queue.empty()){
             value = std::move(m_queue.front());
             m_queue.pop();
+        }
+        return 0;
+    }
+
+    void stop(){
+        std::lock_guard<std::mutex> lock(m_mtx);
+        if(m_running.load(std::memory_order_acquire)){
+            m_running.store(false,std::memory_order_release);
+            m_cv.notify_all();
+        }else{
+            // do nothing
+        }
+    }
+
+    void start(){
+        std::lock_guard<std::mutex> lock(m_mtx);
+        if(!m_running.load(std::memory_order_acquire)){
+            m_running.store(true,std::memory_order_release);
+            m_cv.notify_all();
+        }else{
+            // do nothing
         }
     }
 
@@ -139,65 +187,11 @@ private:
     std::queue<T> m_queue;
     std::mutex m_mtx;
     std::condition_variable m_cv;
+    std::atomic<bool> m_running;
 
 };
 
-class Packet{
-public:
-
-    void setMessageType(TypeMessage pTypeNode);
-    TypeMessage getMessageType();
-    void setMessage(std::string pMessage);
-    std::string getMessage();
-    void setSockaddr(sockaddr_in pClientAddr);
-    sockaddr_in getSockaddr();
-    void setPayloadLengh(uint8_t pPayloadLengh);
-    uint8_t getPayloadLengh();
-private:
-    TypeMessage m_typeMessage;
-    uint8_t m_payloadLengh;
-    std::string m_mes;
-    sockaddr_in m_clientAddr;
-};
-
-class RigisterPacket : public Packet{
-public:
-    void setTypeNode(TypeNode pTypeNode);
-    TypeNode getTypeNode();
-    void unPack(char* buffer);
-
-private:
-    TypeNode m_typeNode;
-
-};
-
-class PingPacket : public Packet{
-public:
-    std::string pack();
-};
-
-class PongPacket : public Packet{
-public:
-    void unPack(char* buffer);
-};
-
-class NotifyPacket : public Packet{
-public:
-    void setTypeNode(TypeNode pTypeNode);
-    TypeNode getTypeNode();
-    void setPortNodeotify(uint16_t pPort);
-    uint16_t getPortNodeotify();
-    void setStateNodeNotify(StateList pState);
-    StateList getStateNodeNotify();
-    std::string pack();
-private:
-    TypeNode m_typeNode;
-    uint16_t m_portNodeNotify;
-    StateList m_stateNodeNotify;
-
-};
-
-
+// Bit manipulation utilities
 TypeMessage checkMessageType(char* buffer);
 
 void set_bits(char* buffer, int& offset, uint32_t value, int bitCount);

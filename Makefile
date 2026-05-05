@@ -21,7 +21,8 @@ SOURCES  = source/AppCtrl.cpp \
            source/node_service/DataPlaneNode.cpp \
            source/node_service/NodeBase.cpp \
            source/node_service/OAMNode.cpp \
-           source/udp_connected_lib/UDPConnector.cpp
+           source/udp_connected_lib/UDPConnector.cpp \
+           source/Packet.cpp
 
 
 OBJECTS  = $(patsubst source/%.cpp, $(OBJDIR)/%.o, $(SOURCES))

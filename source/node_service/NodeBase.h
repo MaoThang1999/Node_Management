@@ -1,16 +1,21 @@
 #ifndef NODEBASE_H
 #define NODEBASE_H
 
-#include "../Utils.h"
+
 #include <thread>
 #include <mutex>
 #include <atomic>
+#include "../Utils.h"
 
-
+// Forward declarations
 extern bool g_stateChangeTable[MAX_STATE][MAX_STATE];
 extern ThreadSafeQueue<str_MessageState> g_messageNodeQueue;
 class NodeState;
 
+/**
+ * @brief Base class for all monitored nodes (DataPlane, ControlPlane, OAM).
+ *        Implements a state machine (Init → Alive → Timeout → Dead) using ping/pong.
+ */
 class NodeBase{
 friend class DeadState;
 friend class TimeoutState;
@@ -28,9 +33,10 @@ public:
     void setPongState(bool pFlag);
     bool getPongState();
     void changeState(std::unique_ptr<NodeState> p_state);
+    // Starts the node's internal thread
     void start();
+     // Signals the thread to stop
     void stop();
-    void resume();
     void setClientInfor(sockaddr_in pClientAddr);
     uint16_t getPortInfo();
     sockaddr_in getClientInfor();
@@ -51,10 +57,15 @@ private:
 
     std::condition_variable m_cv;
     static void createID();
+    // Pushes a PING message to NoM
     void sendPing();
+    // Main loop that executes current state
     void handleThread();
 };
 
+/**
+ * @brief Abstract state class for the node state machine.
+ */
 class NodeState{
 public:
 

@@ -1,9 +1,14 @@
+/**
+ * @file NodeManagament.cpp
+ * @brief Implements the NodeManagament singleton – monitors nodes via register/ping/pong.
+ */
 #include "NodeManagament.h"
 
 
 ThreadSafeQueue<str_MessageState> g_messageNodeQueue;
 ThreadSafeQueue<Packet*> g_sendIOQueue;
 ThreadSafeQueue<Packet*> g_receivedIOQueue;
+
 // row: previous State; col: current State
 bool g_stateChangeTable[MAX_STATE][MAX_STATE] = {
                                                     {0, 1, 1, 0}, 
@@ -20,40 +25,49 @@ NodeManagament::~NodeManagament(){
     
 }
 
-void NodeManagament::start(){
+bool NodeManagament::start(){
     if(!(m_running.load(std::memory_order_acquire))){
         m_running.store(true,std::memory_order_release);
-        m_nodeHandleThread = std::thread([&](){handleSendData();});
+
+        g_receivedIOQueue.start();
+        g_messageNodeQueue.start();
+
         m_IOHandleThread = std::thread([&](){handleReceivedData();});
+        m_nodeHandleThread = std::thread([&](){handleSendData();});
+        return true;
     }
+    return false;
 }
 
-void NodeManagament::stop(){
-    std::lock_guard<std::mutex> lock(m_mtx);
+bool NodeManagament::stop(){
+
     if(m_running.load(std::memory_order_acquire)){
         m_running.store(false,std::memory_order_release);
-        m_cv.notify_all();
+        g_receivedIOQueue.stop();
+        g_messageNodeQueue.stop();
+
         if(m_IOHandleThread.joinable()){
             m_IOHandleThread.join();
         }
+
         if(m_nodeHandleThread.joinable()){
             m_nodeHandleThread.join();
         }
+
+        return true;
     }else{
+        return false;
         // do nothing
     }
 
 }
 
-void NodeManagament::resume()
-{
-    std::lock_guard<std::mutex> lock(m_mtx);
-    if(!(m_running.load(std::memory_order_acquire))){
-        m_running.store(true,std::memory_order_release);
-        m_nodeHandleThread = std::thread([&](){handleSendData();});
-        m_IOHandleThread = std::thread([&](){handleReceivedData();});
+bool NodeManagament::isRunning(){
+    if(m_running.load(std::memory_order_acquire)){
+        return true;
+    }else{
+        return false;
     }
-
 }
 
 NodeManagament* NodeManagament::getInstall(){
@@ -65,40 +79,55 @@ NodeManagament* NodeManagament::getInstall(){
         return m_install;
 }
 
-
+// -----------------------------------------------------------------------------
+// Thread: handles incoming packets from g_receivedIOQueue.
+// Processes REGISTER and PONG messages.
+// -----------------------------------------------------------------------------
 void NodeManagament::handleReceivedData(){
 
     Packet* packet = new Packet();
     while(true){
 
-        g_receivedIOQueue.waitAndPop(packet, m_running);
-
+        g_receivedIOQueue.waitAndPop(packet);
+        // Check stop condition after waking up
         if(!m_running.load(std::memory_order_acquire)){
             break;
         }
-        
-        if(packet->getMessageType() == TypeMessage::PONG){
-            
-            checkPongMessage(packet);
 
-        }else if(packet->getMessageType() == TypeMessage::REGISTER ){ //0: register message
-            // cast to register object 
-            RigisterPacket* rPacket =  static_cast<RigisterPacket*>(packet);
-            checkRegisterMessage(rPacket);
+        if(packet != nullptr)
+        {
             
-        }else{
-            // do nothing
+            if(packet->getMessageType() == TypeMessage::PONG){
+                
+                checkPongMessage(packet);
+
+            }else if(packet->getMessageType() == TypeMessage::REGISTER ){ //0: register message
+                // cast to register object 
+                RigisterPacket* rPacket =  static_cast<RigisterPacket*>(packet);
+                checkRegisterMessage(rPacket);
+                
+            }else{
+                // do nothing
+            }
+            delete packet;
+            packet = nullptr;
         }
+    }
+    if(packet != nullptr){
+        delete packet;
+        packet = nullptr;
     }
 }
 
+// -----------------------------------------------------------------------------
+// Thread: handles outgoing messages from g_messageNodeQueue.
+// Processes PING (type 0) and NOTIFY (type 1) messages.
+// -----------------------------------------------------------------------------
 void NodeManagament::handleSendData(){
     
     str_MessageState messageNode;
     while(true){
-
-        g_messageNodeQueue.waitAndPop(messageNode, m_running);
-        
+        g_messageNodeQueue.waitAndPop(messageNode);
         if(!m_running.load(std::memory_order_acquire)){
             break;
         }
@@ -108,14 +137,20 @@ void NodeManagament::handleSendData(){
 
             checkPingMessage(messageNode);
 
-        }else{ // If this is state change message
-
+        // If this is state change message
+        }else if(messageNode.m_messageType == 1){
+             
             checkNotifyMessage(messageNode);
+        }else{
+            // do nothing
         }
 
     }
 }
 
+// -----------------------------------------------------------------------------
+// Updates the corresponding node's PongState when a PONG is received.
+// -----------------------------------------------------------------------------
 void NodeManagament::checkPongMessage(Packet* pPacket){
 
     if(pPacket == nullptr){
@@ -126,7 +161,7 @@ void NodeManagament::checkPongMessage(Packet* pPacket){
         for(auto it = m_vecNodeBase.begin(); it != m_vecNodeBase.end(); ++it){
             sockaddr_in clientAddr = pPacket->getSockaddr();
             if((*it)->getPortInfo() == clientAddr.sin_port){
-                //std::cout << "Set pong message " << std::endl;
+
                 (*it)->setPongState(true);
                 break;
             }
@@ -137,6 +172,9 @@ void NodeManagament::checkPongMessage(Packet* pPacket){
     }
 }
 
+// -----------------------------------------------------------------------------
+// Handles REGISTER message: adds a new node if not already present.
+// -----------------------------------------------------------------------------
 void NodeManagament::checkRegisterMessage(RigisterPacket* pPacket){
 
     if(pPacket == nullptr){
@@ -166,6 +204,9 @@ void NodeManagament::checkRegisterMessage(RigisterPacket* pPacket){
     }
 }
 
+// -----------------------------------------------------------------------------
+// Creates a new node object based on the packet's node type and adds it to the vector.
+// -----------------------------------------------------------------------------
 void NodeManagament::pushNodeToVector(RigisterPacket* pPacket){
     if(pPacket == nullptr){
         return;
@@ -212,6 +253,9 @@ void NodeManagament::pushNodeToVector(RigisterPacket* pPacket){
     }
 }
 
+// -----------------------------------------------------------------------------
+// Creates a PING packet and pushes it to the send queue.
+// -----------------------------------------------------------------------------
 void NodeManagament::checkPingMessage(str_MessageState& pMessageState){
 
     PingPacket* pingPacket = new PingPacket();
@@ -223,6 +267,11 @@ void NodeManagament::checkPingMessage(str_MessageState& pMessageState){
 
 }
 
+// -----------------------------------------------------------------------------
+// Handles NOTIFY messages.
+// - If state == TIMEOUT: sends a NOTIFY packet to all monitored nodes.
+// - If state == DEAD: erases the dead node from the vector.
+// -----------------------------------------------------------------------------
 void NodeManagament::checkNotifyMessage(str_MessageState& pMessageState){
 
     if(pMessageState.m_state == StateList::TIMEOUT){
@@ -239,7 +288,7 @@ void NodeManagament::checkNotifyMessage(str_MessageState& pMessageState){
             notifyPacket->setPayloadLengh(NOTIFY_PLAYLOADLENGTH);
             notifyPacket->setTypeNode(pMessageState.m_typeNode);
             notifyPacket->setStateNodeNotify(pMessageState.m_state);
-            notifyPacket->setPortNodeotify(ntohl(pMessageState.m_clientAddr.sin_port));
+            notifyPacket->setPortNodeotify(pMessageState.m_clientAddr.sin_port);
             g_sendIOQueue.push(notifyPacket, true);
         }
     }
