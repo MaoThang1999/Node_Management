@@ -97,6 +97,8 @@ PROGRAMSTATE execute(){
  * @return PROGRAMSTATE::SHUTDOWN to exit.
  */
 PROGRAMSTATE finalize(){
+    IOHandler::getInstall()->stop();
+    NodeManagament::getInstall()->stop();
     SharedContext ctx = IOHandler::getInstall()->getUDPSocket();
     closeUDPSock(ctx);
     return PROGRAMSTATE::SHUTDOWN;

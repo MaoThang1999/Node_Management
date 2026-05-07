@@ -1,0 +1,13 @@
+ThreadID [35240] 2026-05-07 01:24:04.329 pushNodeToVector     (line 238 ): Add a CONTROL_PLANE to NoM, NumofNode[1] NodeID[1] Port[20010]
+ThreadID [35240] 2026-05-07 01:24:06.50  pushNodeToVector     (line 226 ): Add a DATA_PLANENode to NoM, NumofNode[2] NodeID[2] Port[20013]
+ThreadID [15844] 2026-05-07 01:24:06.340 handleState          (line 264 ): NodeID[1] Type[CONTROL_PLANE] Port[20010] timeout
+ThreadID [15844] 2026-05-07 01:24:07.168 handleState          (line 292 ): NodeID[1] Type[CONTROL_PLANE] Port[20010] Alive
+ThreadID [35524] 2026-05-07 01:24:08.59  handleState          (line 264 ): NodeID[2] Type[DATA_PLANE] Port[20013] timeout
+ThreadID [35240] 2026-05-07 01:24:08.721 pushNodeToVector     (line 226 ): Add a DATA_PLANENode to NoM, NumofNode[3] NodeID[3] Port[20016]
+ThreadID [35524] 2026-05-07 01:24:08.875 handleState          (line 292 ): NodeID[2] Type[DATA_PLANE] Port[20013] Alive
+ThreadID [37436] 2026-05-07 01:24:20.69  handleState          (line 264 ): NodeID[3] Type[DATA_PLANE] Port[20016] timeout
+ThreadID [15844] 2026-05-07 01:24:20.651 handleState          (line 264 ): NodeID[1] Type[CONTROL_PLANE] Port[20010] timeout
+ThreadID [35524] 2026-05-07 01:24:20.745 handleState          (line 264 ): NodeID[2] Type[DATA_PLANE] Port[20013] timeout
+ThreadID [37436] 2026-05-07 01:24:30.156 handleState          (line 326 ): NodeID[3] Type[DATA_PLANE] Port[20016] dead
+ThreadID [15844] 2026-05-07 01:24:30.726 handleState          (line 326 ): NodeID[1] Type[CONTROL_PLANE] Port[20010] dead
+ThreadID [35524] 2026-05-07 01:24:30.821 handleState          (line 326 ): NodeID[2] Type[DATA_PLANE] Port[20013] dead

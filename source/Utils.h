@@ -19,7 +19,7 @@
 #include <stdio.h>
 #include "Log_Handler.h"
 
-#define MAX_SAFE_QUEUE 512
+#define MAX_SAFE_QUEUE 100000
 #define ERROR_CODE            (-1)
 #define SUCCESS_CODE            (0)
 #define MAX_STATE 4 
@@ -91,6 +91,7 @@ public:
         std::lock_guard<std::mutex> lock(m_mtx);
         if(m_queue.size() >= MAX_SAFE_QUEUE){
             if(bForce){
+                DEBUG_LOG("Max SAFE_QUEUE");
                 m_queue.pop();
             }else{
                 return;

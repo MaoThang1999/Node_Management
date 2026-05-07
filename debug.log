@@ -1,0 +1,18 @@
+ThreadID [34164] 2026-05-07 01:29:14.122 pushNodeToVector     (line 238 ): Add a CONTROL_PLANE to NoM, NumofNode[1] NodeID[1] Port[20010]
+ThreadID [34164] 2026-05-07 01:29:15.490 pushNodeToVector     (line 226 ): Add a DATA_PLANENode to NoM, NumofNode[2] NodeID[2] Port[20013]
+ThreadID [34164] 2026-05-07 01:29:16.529 pushNodeToVector     (line 226 ): Add a DATA_PLANENode to NoM, NumofNode[3] NodeID[3] Port[20016]
+ThreadID [36324] 2026-05-07 01:29:27.883 handleState          (line 264 ): NodeID[3] Type[DATA_PLANE] Port[20016] timeout
+ThreadID [25384] 2026-05-07 01:29:27.914 handleState          (line 264 ): NodeID[1] Type[CONTROL_PLANE] Port[20010] timeout
+ThreadID [17180] 2026-05-07 01:29:28.415 handleState          (line 264 ): NodeID[2] Type[DATA_PLANE] Port[20013] timeout
+ThreadID [36324] 2026-05-07 01:29:32.726 handleState          (line 292 ): NodeID[3] Type[DATA_PLANE] Port[20016] Alive
+ThreadID [25384] 2026-05-07 01:29:32.758 handleState          (line 292 ): NodeID[1] Type[CONTROL_PLANE] Port[20010] Alive
+ThreadID [17180] 2026-05-07 01:29:33.258 handleState          (line 292 ): NodeID[2] Type[DATA_PLANE] Port[20013] Alive
+ThreadID [36324] 2026-05-07 01:32:30.10  handleState          (line 264 ): NodeID[3] Type[DATA_PLANE] Port[20016] timeout
+ThreadID [25384] 2026-05-07 01:32:30.261 handleState          (line 264 ): NodeID[1] Type[CONTROL_PLANE] Port[20010] timeout
+ThreadID [17180] 2026-05-07 01:32:30.372 handleState          (line 264 ): NodeID[2] Type[DATA_PLANE] Port[20013] timeout
+ThreadID [36324] 2026-05-07 01:32:40.90  handleState          (line 326 ): NodeID[3] Type[DATA_PLANE] Port[20016] dead
+ThreadID [25384] 2026-05-07 01:32:40.344 handleState          (line 326 ): NodeID[1] Type[CONTROL_PLANE] Port[20010] dead
+ThreadID [17180] 2026-05-07 01:32:40.454 handleState          (line 326 ): NodeID[2] Type[DATA_PLANE] Port[20013] dead
+ThreadID [756  ] 2026-05-07 01:36:25.35  pushNodeToVector     (line 238 ): Add a CONTROL_PLANE to NoM, NumofNode[1] NodeID[4] Port[20000]
+ThreadID [16968] 2026-05-07 01:36:30.642 handleState          (line 264 ): NodeID[4] Type[CONTROL_PLANE] Port[20000] timeout
+ThreadID [16968] 2026-05-07 01:36:40.719 handleState          (line 326 ): NodeID[4] Type[CONTROL_PLANE] Port[20000] dead

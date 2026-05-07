@@ -6,6 +6,7 @@ import tkinter as tk
 from tkinter import scrolledtext, ttk
 import tkinter.simpledialog
 import gc
+from datetime import datetime   # <-- NEW import for timestamp
 
 # ----- Constants -----
 SERVER_IP = "127.0.0.1"
@@ -180,9 +181,13 @@ class NodeFrame(tk.Frame):
         self.node = Node(node_id, node_type, local_port, self.append_message)
 
     def append_message(self, text):
+        """Append a line of text with a timestamp prefix (MM:SS.mmm)."""
         def _update():
-            # Không cần toggle state nữa, vì đã luôn normal
-            self.msg_display.insert(tk.END, text + '\n' + '-'*40 + '\n')
+            # Generate timestamp: minutes:seconds.milliseconds (3 digits)
+            now = datetime.now()
+            timestamp = now.strftime("%M:%S.") + f"{now.microsecond // 1000:03d}"
+            # Insert timestamp + original message
+            self.msg_display.insert(tk.END, f"[{timestamp}] {text}\n" + '-'*40 + '\n')
             total_lines = int(self.msg_display.index('end-1c').split('.')[0])
             if total_lines > MAX_LOG_LINES:
                 self.msg_display.delete(1.0, f"{LINES_TO_DELETE + 1}.0")
